@@ -1,4 +1,5 @@
 import os
+from collections import deque
 
 import imageio  # for saving gif
 import matplotlib.pyplot as plt
@@ -18,9 +19,6 @@ from utils import transpose_list, transpose_to_tensor
 # TODO: Maybe try to add in states and actions in the second layer (like DDPG)
 # TODO: If input values are far from 1, use batch norm; but if they're only a bit bigger it shouldn't matter too much
 
-### QUESTIONS ###
-# TODO: Maybe parallel agents is 4 and normal agents are 3 because one of them is the adversary
-
 
 class TennisPlayingModel:
     def __init__(self, environment, num_agents=2, num_episodes=1000, save_gifs=False):
@@ -39,6 +37,9 @@ class TennisPlayingModel:
         self.state_size = env_info.vector_observations.shape[1]
 
         self.agent_rewards = [[] for i in range(self.num_agents)]
+        self.scores = []
+        self.scores_deque = deque(maxlen=100)
+        self.rolling_avg_score = 0.0
         
         # Hyperparameters
         self.number_of_episodes = num_episodes
@@ -50,7 +51,12 @@ class TennisPlayingModel:
 
         # Helpers
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.maddpg = MADDPG(action_size=self.action_size, state_size=self.state_size, device=self.device)
+        self.maddpg = MADDPG(
+            action_size=self.action_size, 
+            state_size=self.state_size, 
+            device=self.device,
+            tau=0.002
+        )
         self.buffer = ReplayBuffer(
             action_size=self.action_size, 
             buffer_size=int(self.episodes_in_replay * self.episode_length), 
@@ -106,13 +112,15 @@ class TennisPlayingModel:
     def train(self):
         widget = [
             "Episode: ", pb.Counter(), '/' , str(self.number_of_episodes), ' ', 
-            pb.Percentage(), ' ', pb.ETA(), ' ', pb.Bar(marker=pb.RotatingMarker()), ' '
+            pb.Percentage(), ' ', pb.ETA(), ' ', pb.Bar(marker=pb.RotatingMarker()), ' ', 
+            'Rolling Average: ', pb.FormatLabel('')
         ]
         timer = pb.ProgressBar(widgets=widget, maxval=self.number_of_episodes).start()
         self.agent_rewards = [[] for i in range(self.num_agents)]  # Clear agent rewards
 
-        for episode in range(1, self.number_of_episodes+1):
-            timer.update(episode)
+        for i_episode in range(1, self.number_of_episodes+1):
+            widget[12] = pb.FormatLabel(str(self.rolling_avg_score)[:7])
+            timer.update(i_episode)
 
             # Reset OU Noise
             for i in range(self.num_agents):
@@ -123,7 +131,7 @@ class TennisPlayingModel:
             episode_rewards = np.zeros(self.num_agents)  # rewards this episode (all 0's initially)
 
             # Save info if once every save_interval steps or if last episode
-            save_info = ((episode) % self.save_interval == 0 or episode == self.number_of_episodes)
+            save_info = ((i_episode) % self.save_interval == 0 or i_episode == self.number_of_episodes)
 
             for episode_t in range(self.episode_length):
                 actions = self.maddpg.act(states, noise=self.noise)
@@ -144,11 +152,10 @@ class TennisPlayingModel:
                 states = next_states
 
                 # Ignoring this for now so the agent keeps playing
-                # if np.any(dones):
-                #     break
+                # if np.any(dones): break
             
             # Update once after every episode_per_update
-            if len(self.buffer) > self.batch_size and episode % self.episode_per_update == 0:
+            if len(self.buffer) > self.batch_size and i_episode % self.episode_per_update == 0:
                 for a_i in range(self.num_agents):
                     samples = self.buffer.sample()
                     # self.maddpg.update(samples, a_i, self.logger)
@@ -159,21 +166,17 @@ class TennisPlayingModel:
             for i in range(self.num_agents):
                 self.agent_rewards[i].append(episode_rewards[i])
 
-            if episode % 100 == 0 or episode == self.number_of_episodes:
-                avg_rewards = []
-                for i in range(self.num_agents):
-                    avg_rewards.append(np.mean(self.agent_rewards[i]))
-                
-                # # Clear rewards???
-                # self.agent_rewards = [[] for i in range(self.num_agents)]
+            max_episode_score = np.max(episode_rewards)
+            self.scores_deque.append(max_episode_score)
+            self.scores.append(max_episode_score)
+            self.rolling_avg_score = np.mean(self.scores_deque)
 
-                # TODO: Add calculation for 100-episodes rolling reward average
-                
-                # for a_i, avg_rew in enumerate(avg_rewards):
-                #     self.logger.add_scalar("agent%i/mean_episode_rewards" % a_i, avg_rew, episode)
+            # if i_episode % 100 == 0 or i_episode == self.number_of_episodes:
+            #     for score in self.scores_deque):
+            #         self.logger.add_scalar("rolling_score" % a_i, score, episode)
 
             if save_info:
-                self.save_model(episode)
+                self.save_model(i_episode)
         
         # TODO: Add a way to only close these when desired
         # self.terminate_env()
