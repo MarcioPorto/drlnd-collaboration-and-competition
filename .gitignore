@@ -1,0 +1,8 @@
+.DS_Store
+__pycache__/
+.ipynb_checkpoints/
+.vscode/
+
+unity-environment.log
+Soccer.app
+Tennis.app
