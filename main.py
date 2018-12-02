@@ -22,6 +22,8 @@ from utils import transpose_list, transpose_to_tensor
 # NOTE: Move action addition to critic network to layer 1
 # NOTE: The critic needs the states (24+24) and the actions (2+2) of both agents
 # NOTE: Read the paper
+# NOTE: requirements.txt
+# NOTE: Look at loss
 
 
 class TennisPlayingModel:
