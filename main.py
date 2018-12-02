@@ -14,11 +14,8 @@ from maddpg_agent import MADDPG
 from utils import transpose_list, transpose_to_tensor
 
 
-### ADVICE ###
-# TODO: If not solved fast enough, play around with tau and batch_size in order to finish faster
-# TODO: If input values are far from 1, use batch norm; but if they're only a bit bigger it shouldn't matter too much
-
-# NOTE: The critic needs the observations (24+24) and the actions (2+2) of both agents
+# NOTE: If not solved fast enough, play around with tau and batch_size in order to finish faster
+# NOTE: If input values are far from 1, use batch norm; but if they're only a bit bigger it shouldn't matter too much
 # NOTE: Read the paper
 # NOTE: Look at loss
 
@@ -141,7 +138,7 @@ class TennisPlayingModel:
 
             env_info = self.env.reset(train_mode=True)[self.brain_name]
             observation = env_info.vector_observations
-            observation_full = observation.flatten()
+            observation_full = np.reshape(observation, (1, self.action_size * self.observation_size))
 
             episode_rewards = np.zeros(self.num_agents)
 
@@ -149,21 +146,24 @@ class TennisPlayingModel:
             save_info = ((i_episode % self.save_interval) == 0 or i_episode == self.number_of_episodes)
 
             for episode_t in range(self.episode_length):
-                actions = self.maddpg.act(observation, noise=self.noise)
+                actions = self.maddpg.step(observation, noise=self.noise)
                 actions_array = torch.stack(actions).detach().numpy()
                 actions = np.rollaxis(actions_array, 1)
                 actions = np.clip(actions, -1, 1)
+                actions_full = np.reshape(actions, (1, self.action_size * self.num_agents))
                 self.noise *= self.noise_reduction
 
                 env_info = self.env.step(actions)[self.brain_name]
                 next_observation = env_info.vector_observations
-                next_observation_full = next_observation.flatten()
+                next_observation_full = np.reshape(next_observation, (1, self.action_size * self.observation_size))
                 rewards = env_info.rewards
                 dones = env_info.local_done
 
                 for i in range(self.num_agents):
                     self.buffer.add(
-                        observation[i], observation_full[i], actions[i], rewards[i], next_observation[i], next_observation_full[i], dones[i]
+                        observation[i], observation_full, 
+                        actions[i], actions_full, rewards[i], 
+                        next_observation[i], next_observation_full, dones[i]
                     )
 
                 episode_rewards += rewards
