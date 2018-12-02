@@ -21,11 +21,13 @@ class Network(nn.Module):
         self.actor = actor
         self.fc1 = nn.Linear(input_dim, hidden_in_dim)
 
-        if self.actor:
-            self.fc2 = nn.Linear(hidden_in_dim, hidden_out_dim)
-        else:
-            # add action to second layer in the critic
-            self.fc2 = nn.Linear(hidden_in_dim + output_dim, hidden_out_dim)
+        # if self.actor:
+        #     self.fc2 = nn.Linear(hidden_in_dim, hidden_out_dim)
+        # else:
+        #     # add action to second layer in the critic
+        #     self.fc2 = nn.Linear(hidden_in_dim + output_dim, hidden_out_dim)
+
+        self.fc2 = nn.Linear(hidden_in_dim, hidden_out_dim)
 
         self.fc3 = nn.Linear(hidden_out_dim, output_dim)
         self.reset_parameters()
@@ -36,13 +38,16 @@ class Network(nn.Module):
         self.fc3.weight.data.uniform_(-1e-3, 1e-3)
 
     def forward(self, state, action=None):
-        if self.actor:
-            h1 = self.activation_fn(self.fc1(state))
-            h2 = self.activation_fn(self.fc2(h1))
-            h3 = self.fc3(h2)
-        else:
-            h1 = self.activation_fn(self.fc1(state))
-            h1a = torch.cat((h1, action), dim=1)
-            h2 = self.activation_fn(self.fc2(h1a))
-            h3 = self.fc3(h2)
+        h1 = self.activation_fn(self.fc1(state))
+        h2 = self.activation_fn(self.fc2(h1))
+        h3 = self.fc3(h2)
+        # if self.actor:
+        #     h1 = self.activation_fn(self.fc1(state))
+        #     h2 = self.activation_fn(self.fc2(h1))
+        #     h3 = self.fc3(h2)
+        # else:
+        #     h1 = self.activation_fn(self.fc1(state))
+        #     h1a = torch.cat((h1, action), dim=1)
+        #     h2 = self.activation_fn(self.fc2(h1a))
+        #     h3 = self.fc3(h2)
         return h3

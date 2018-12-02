@@ -16,13 +16,10 @@ from utils import transpose_list, transpose_to_tensor
 
 ### ADVICE ###
 # TODO: If not solved fast enough, play around with tau and batch_size in order to finish faster
-# TODO: Maybe try to add in states and actions in the second layer (like DDPG)
 # TODO: If input values are far from 1, use batch norm; but if they're only a bit bigger it shouldn't matter too much
 
-# NOTE: Move action addition to critic network to layer 1
-# NOTE: The critic needs the states (24+24) and the actions (2+2) of both agents
+# NOTE: The critic needs the observations (24+24) and the actions (2+2) of both agents
 # NOTE: Read the paper
-# NOTE: requirements.txt
 # NOTE: Look at loss
 
 
@@ -40,7 +37,7 @@ class TennisPlayingModel:
 
         self.num_agents = len(env_info.agents)
         self.action_size = self.brain.vector_action_space_size
-        self.state_size = env_info.vector_observations.shape[1]
+        self.observation_size = env_info.vector_observations.shape[1]
 
         self.agent_rewards = [[] for i in range(self.num_agents)]
         self.scores = []
@@ -63,7 +60,7 @@ class TennisPlayingModel:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.maddpg = MADDPG(
             action_size=self.action_size, 
-            state_size=self.state_size, 
+            observation_size=self.observation_size, 
             device=self.device,
             lr_actor=self.lr_actor,
             lr_critic=self.lr_critic,
@@ -92,7 +89,7 @@ class TennisPlayingModel:
 
         # # Logging
         # self.log_dir = os.getcwd() + "/log"
-        # self.logger = SummaryWriter(log_dir=self.log_dir)
+        self.logger = None  # SummaryWriter(log_dir=self.log_dir)
 
     def seeding(self, seed=1):
         np.random.seed(seed)
@@ -134,6 +131,7 @@ class TennisPlayingModel:
         solved = False
 
         for i_episode in range(1, self.number_of_episodes+1):
+            # Update progress bar
             widget[12] = pb.FormatLabel(str(self.rolling_avg_score)[:7])
             timer.update(i_episode)
 
@@ -142,30 +140,34 @@ class TennisPlayingModel:
                 self.maddpg.maddpg_agents[i].noise.reset()
 
             env_info = self.env.reset(train_mode=True)[self.brain_name]
-            states = env_info.vector_observations
+            observation = env_info.vector_observations
+            observation_full = observation.flatten()
 
-            episode_rewards = np.zeros(self.num_agents)  # rewards this episode (all 0's initially)
+            episode_rewards = np.zeros(self.num_agents)
 
-            # Save info if once every save_interval steps or if last episode
-            save_info = ((i_episode) % self.save_interval == 0 or i_episode == self.number_of_episodes)
+            # Save info once every save_interval steps or if last episode
+            save_info = ((i_episode % self.save_interval) == 0 or i_episode == self.number_of_episodes)
 
             for episode_t in range(self.episode_length):
-                actions = self.maddpg.act(states, noise=self.noise)
+                actions = self.maddpg.act(observation, noise=self.noise)
                 actions_array = torch.stack(actions).detach().numpy()
                 actions = np.rollaxis(actions_array, 1)
                 actions = np.clip(actions, -1, 1)
                 self.noise *= self.noise_reduction
 
                 env_info = self.env.step(actions)[self.brain_name]
-                next_states = env_info.vector_observations
+                next_observation = env_info.vector_observations
+                next_observation_full = next_observation.flatten()
                 rewards = env_info.rewards
                 dones = env_info.local_done
 
                 for i in range(self.num_agents):
-                    self.buffer.add(states[i], actions[i], rewards[i], next_states[i], dones[i])
+                    self.buffer.add(
+                        observation[i], observation_full[i], actions[i], rewards[i], next_observation[i], next_observation_full[i], dones[i]
+                    )
 
                 episode_rewards += rewards
-                states = next_states
+                observation, observation_full = next_observation, next_observation_full
 
                 if np.any(dones):
                     break
@@ -174,8 +176,7 @@ class TennisPlayingModel:
             if len(self.buffer) > self.batch_size and i_episode % self.episode_per_update == 0:
                 for a_i in range(self.num_agents):
                     samples = self.buffer.sample()
-                    # self.maddpg.update(samples, a_i, self.logger)
-                    self.maddpg.update(samples, a_i, None)
+                    self.maddpg.update(samples, a_i, self.logger)
                 self.maddpg.update_targets()
             
             # Save rewards from this episode
@@ -193,9 +194,10 @@ class TennisPlayingModel:
                 ))
                 solved = True
 
-            # if i_episode % 100 == 0 or i_episode == self.number_of_episodes:
-            #     for score in self.scores_deque):
-            #         self.logger.add_scalar("rolling_score" % a_i, score, episode)
+            if self.logger:
+                if i_episode % 100 == 0 or i_episode == self.number_of_episodes:
+                    for score in self.scores_deque:
+                        self.logger.add_scalar("rolling_score" % a_i, score, episode)
 
             if save_info:
                 self.save_model(i_episode)
@@ -242,20 +244,20 @@ class TennisPlayingModel:
 
         for i in range(1, num_games+1):
             env_info = self.env.reset(train_mode=False)[self.brain_name]   
-            states = env_info.vector_observations
+            observations = env_info.vector_observations
             scores = np.zeros(self.num_agents)
             
             while True:
-                actions = self.maddpg.act(states)
+                actions = self.maddpg.act(observations)
                 actions_array = torch.stack(actions).detach().numpy()
                 actions = np.rollaxis(actions_array, 1)
                 actions = np.clip(actions, -1, 1)
                 env_info = self.env.step(actions)[self.brain_name]
-                next_states = env_info.vector_observations
+                next_observations = env_info.vector_observations
                 rewards = env_info.rewards
                 dones = env_info.local_done
                 scores += env_info.rewards
-                states = next_states
+                observations = next_observations
                 
                 if np.any(dones):
                     break
