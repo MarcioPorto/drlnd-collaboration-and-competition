@@ -19,6 +19,10 @@ from utils import transpose_list, transpose_to_tensor
 # TODO: Maybe try to add in states and actions in the second layer (like DDPG)
 # TODO: If input values are far from 1, use batch norm; but if they're only a bit bigger it shouldn't matter too much
 
+# NOTE: Move action addition to critic network to layer 1
+# NOTE: The critic needs the states (24+24) and the actions (2+2) of both agents
+# NOTE: Read the paper
+
 
 class TennisPlayingModel:
     def __init__(self, environment, num_agents=2, num_episodes=1000, save_gifs=False):
@@ -43,15 +47,15 @@ class TennisPlayingModel:
         
         # Hyperparameters
         self.number_of_episodes = num_episodes
-        self.episode_length = 300
-        self.batch_size = 512
+        self.episode_length = 500
+        self.batch_size = 256
         self.save_interval = 100
-        self.episode_per_update = 2
+        self.episode_per_update = 1
         self.episodes_in_replay = 1e6
-        self.discount_factor = 0.99
+        self.discount_factor = 0.95
         self.lr_actor = 1e-4
         self.lr_critic = 1e-3
-        self.tau = 0.002
+        self.tau = 1e-3
 
         # Helpers
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -161,9 +165,9 @@ class TennisPlayingModel:
                 episode_rewards += rewards
                 states = next_states
 
-                # Ignoring this for now so the agent keeps playing
-                # if np.any(dones): break
-            
+                if np.any(dones):
+                    break
+
             # Update once after every episode_per_update
             if len(self.buffer) > self.batch_size and i_episode % self.episode_per_update == 0:
                 for a_i in range(self.num_agents):

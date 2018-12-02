@@ -1,9 +1,10 @@
 import os
+
+import numpy as np
 import torch
 import torch.nn.functional as F
 import torch.distributed as dist
 from torch.autograd import Variable
-import numpy as np
 
 
 def transpose_list(mylist):
