@@ -9,18 +9,18 @@ from utils import hard_update, gumbel_softmax, onehot_from_logits
 class DDPGAgent:
     def __init__(self, in_actor, hidden_in_actor, hidden_out_actor, out_actor, 
                  in_critic, hidden_in_critic, hidden_out_critic, device, 
-                 lr_actor=1.0e-2, lr_critic=1.0e-2):
+                 lr_actor=1e-4, lr_critic=1e-3):
         super(DDPGAgent, self).__init__()
         self.device = device
 
         self.actor = Network(in_actor, hidden_in_actor, hidden_out_actor, out_actor, actor=True).to(device)
-        self.critic = Network(in_critic, hidden_in_critic, hidden_out_critic, 1).to(device)
+        self.critic = Network(in_critic, hidden_in_critic, hidden_out_critic, out_actor).to(device)
         self.target_actor = Network(in_actor, hidden_in_actor, hidden_out_actor, out_actor, actor=True).to(device)
-        self.target_critic = Network(in_critic, hidden_in_critic, hidden_out_critic, 1).to(device)
+        self.target_critic = Network(in_critic, hidden_in_critic, hidden_out_critic, out_actor).to(device)
 
-        self.noise = OUNoise(out_actor, scale=1.0)
+        self.noise = OUNoise(size=out_actor, seed=1)
         
-        # initialize targets same as original networks
+        # Initialize targets same as original networks
         hard_update(self.target_actor, self.actor)
         hard_update(self.target_critic, self.critic)
 
@@ -29,8 +29,8 @@ class DDPGAgent:
 
     def act(self, state, noise=0.0):
         state = state.to(self.device)
-        return self.actor(state) + noise * self.noise.noise()
+        return self.actor(state) + noise * self.noise.sample()
 
     def target_act(self, state, noise=0.0):
         state = state.to(self.device)
-        return self.target_actor(state) + noise * self.noise.noise()
+        return self.target_actor(state) + noise * self.noise.sample()

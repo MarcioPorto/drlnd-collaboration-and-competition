@@ -10,6 +10,10 @@ For this project, I decided to work on solving the version of the Reacher enviro
 
 ## Future Work Ideas
 
+## Notes
+
+- obs space discrepancy
+
 
 <!-- 
 # DRLND Project 2 Report (Reacher)

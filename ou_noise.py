@@ -1,23 +1,28 @@
+import copy
+import random
+
 import numpy as np
 import torch
 
 
-# From https://github.com/songrotek/DDPG/blob/master/ou_noise.py
 class OUNoise:
-    def __init__(self, action_dimension, scale=0.1, mu=0, theta=0.15, sigma=0.2):
-        self.action_dimension = action_dimension
-        self.scale = scale
-        self.mu = mu
+    """Ornstein-Uhlenbeck process."""
+
+    def __init__(self, size, seed, mu=0.0, theta=0.15, sigma=0.2):
+        """Initialize parameters and noise process."""
+        self.mu = mu * np.ones(size)
         self.theta = theta
         self.sigma = sigma
-        self.state = np.ones(self.action_dimension) * self.mu
+        self.seed = random.seed(seed)
         self.reset()
 
     def reset(self):
-        self.state = np.ones(self.action_dimension) * self.mu
+        """Reset the internal state (= noise) to mean (mu)."""
+        self.state = copy.copy(self.mu)
 
-    def noise(self):
+    def sample(self):
+        """Update internal state and return it as a noise sample."""
         x = self.state
-        dx = self.theta * (self.mu - x) + self.sigma * np.random.randn(len(x))
+        dx = self.theta * (self.mu - x) + self.sigma * np.array([np.random.normal(loc=0, scale=1) for _ in range(len(x))])
         self.state = x + dx
-        return torch.tensor(self.state * self.scale).float()
+        return torch.tensor(self.state).float()

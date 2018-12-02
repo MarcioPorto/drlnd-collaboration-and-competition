@@ -1,7 +1,8 @@
+import numpy as np
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as f
-import numpy as np
 
 
 def hidden_init(layer):
@@ -14,40 +15,34 @@ class Network(nn.Module):
     def __init__(self, input_dim, hidden_in_dim, hidden_out_dim, output_dim, 
                  actor=False, activation_fn=f.relu):
         """Network definition shared by actor and critic"""
-        
         super(Network, self).__init__()
 
-        """self.input_norm = nn.BatchNorm1d(input_dim)
-        self.input_norm.weight.data.fill_(1)
-        self.input_norm.bias.data.fill_(0)"""
-
-        self.fc1 = nn.Linear(input_dim, hidden_in_dim)
-        self.fc2 = nn.Linear(hidden_in_dim, hidden_out_dim)
-        self.fc3 = nn.Linear(hidden_out_dim, output_dim)
         self.activation_fn = activation_fn
         self.actor = actor
+        self.fc1 = nn.Linear(input_dim, hidden_in_dim)
 
-        # self.reset_parameters()  # this was commented out already
+        if self.actor:
+            self.fc2 = nn.Linear(hidden_in_dim, hidden_out_dim)
+        else:
+            # add action to second layer in the critic
+            self.fc2 = nn.Linear(hidden_in_dim + output_dim, hidden_out_dim)
+
+        self.fc3 = nn.Linear(hidden_out_dim, output_dim)
+        self.reset_parameters()
 
     def reset_parameters(self):
         self.fc1.weight.data.uniform_(*hidden_init(self.fc1))
         self.fc2.weight.data.uniform_(*hidden_init(self.fc2))
         self.fc3.weight.data.uniform_(-1e-3, 1e-3)
 
-    def forward(self, x):
+    def forward(self, state, action=None):
         if self.actor:
-            # return a vector of the force
-            h1 = self.activation_fn(self.fc1(x))
+            h1 = self.activation_fn(self.fc1(state))
             h2 = self.activation_fn(self.fc2(h1))
             h3 = self.fc3(h2)
-            norm = torch.norm(h3)
-            
-            # h3 is a 2D vector (a force that is applied to the agent)
-            # we bound the norm of the vector to be between 0 and 10
-            return 10.0 * (f.tanh(norm)) * h3/norm if norm > 0 else 10 * h3
         else:
-            # critic network simply outputs a number
-            h1 = self.activation_fn(self.fc1(x))
-            h2 = self.activation_fn(self.fc2(h1))
+            h1 = self.activation_fn(self.fc1(state))
+            h1a = torch.cat((h1, action), dim=1)
+            h2 = self.activation_fn(self.fc2(h1a))
             h3 = self.fc3(h2)
-            return h3
+        return h3

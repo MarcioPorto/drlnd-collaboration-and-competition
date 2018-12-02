@@ -24,7 +24,7 @@ class TennisPlayingModel:
     def __init__(self, environment, num_agents=2, num_episodes=1000, save_gifs=False):
         seed = 1
         self.seeding(seed=seed)
-
+        
         # Environment
         self.env = environment
         self.brain_name = self.env.brain_names[0]
@@ -43,11 +43,15 @@ class TennisPlayingModel:
         
         # Hyperparameters
         self.number_of_episodes = num_episodes
-        self.episode_length = 80                        # max_t equivalent
-        self.batch_size = 1000
-        self.save_interval = 1000                       # how many episodes to save policy and gif
-        self.episode_per_update = 2                     # how many episodes before update
-        self.episodes_in_replay = 5000
+        self.episode_length = 300
+        self.batch_size = 512
+        self.save_interval = 100
+        self.episode_per_update = 2
+        self.episodes_in_replay = 1e6
+        self.discount_factor = 0.99
+        self.lr_actor = 1e-4
+        self.lr_critic = 1e-3
+        self.tau = 0.002
 
         # Helpers
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -55,7 +59,10 @@ class TennisPlayingModel:
             action_size=self.action_size, 
             state_size=self.state_size, 
             device=self.device,
-            tau=0.002
+            lr_actor=self.lr_actor,
+            lr_critic=self.lr_critic,
+            discount_factor=self.discount_factor,
+            tau=self.tau
         )
         self.buffer = ReplayBuffer(
             action_size=self.action_size, 
@@ -116,7 +123,9 @@ class TennisPlayingModel:
             'Rolling Average: ', pb.FormatLabel('')
         ]
         timer = pb.ProgressBar(widgets=widget, maxval=self.number_of_episodes).start()
+        
         self.agent_rewards = [[] for i in range(self.num_agents)]  # Clear agent rewards
+        solved = False
 
         for i_episode in range(1, self.number_of_episodes+1):
             widget[12] = pb.FormatLabel(str(self.rolling_avg_score)[:7])
@@ -128,6 +137,7 @@ class TennisPlayingModel:
 
             env_info = self.env.reset(train_mode=True)[self.brain_name]
             states = env_info.vector_observations
+
             episode_rewards = np.zeros(self.num_agents)  # rewards this episode (all 0's initially)
 
             # Save info if once every save_interval steps or if last episode
@@ -146,7 +156,7 @@ class TennisPlayingModel:
                 dones = env_info.local_done
 
                 for i in range(self.num_agents):
-                    self.buffer.add(states[i,:], actions[i,:], rewards[i], next_states[i,:], dones[i])
+                    self.buffer.add(states[i], actions[i], rewards[i], next_states[i], dones[i])
 
                 episode_rewards += rewards
                 states = next_states
@@ -171,6 +181,12 @@ class TennisPlayingModel:
             self.scores.append(max_episode_score)
             self.rolling_avg_score = np.mean(self.scores_deque)
 
+            if self.rolling_avg_score >= 0.5 and not solved:
+                print('\nEnvironment solved in {:d} episodes!\tAverage Score: {:.2f}'.format(
+                    i_episode, self.rolling_avg_score
+                ))
+                solved = True
+
             # if i_episode % 100 == 0 or i_episode == self.number_of_episodes:
             #     for score in self.scores_deque):
             #         self.logger.add_scalar("rolling_score" % a_i, score, episode)
@@ -178,21 +194,25 @@ class TennisPlayingModel:
             if save_info:
                 self.save_model(i_episode)
         
-        # TODO: Add a way to only close these when desired
-        # self.terminate_env()
         timer.finish()
 
     def terminate_env(self):
-        self.env.close()
         # self.logger.close()
+        self.env.close()
     
-    def plot_training_progress(self):
+    def plot_training_progress(self, individual_scores=False):
         fig = plt.figure()
         ax = fig.add_subplot(111)
-        # Plot one line for each agent
-        for i in range(self.num_agents):
-            scores = self.agent_rewards[i]
-            plt.plot(np.arange(1, len(scores) + 1), scores, label="Agent #{}".format(i))
+        
+        if individual_scores:
+            # Plot one line for each agent
+            for i in range(self.num_agents):
+                scores = self.agent_rewards[i]
+                plt.plot(np.arange(1, len(scores) + 1), scores, label="Agent #{}".format(i))
+        else:
+            # Plot the oficial reward of each episode
+            plt.plot(np.arange(1, len(self.scores) + 1), self.scores, label="Score")
+        
         plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
         plt.ylabel("Score")
         plt.xlabel("Episode #")
