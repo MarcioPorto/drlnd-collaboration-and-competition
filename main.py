@@ -17,7 +17,6 @@ from utils import transpose_list, transpose_to_tensor
 # NOTE: If not solved fast enough, play around with tau and batch_size in order to finish faster
 # NOTE: If input values are far from 1, use batch norm; but if they're only a bit bigger it shouldn't matter too much
 # NOTE: Read the paper
-# NOTE: Look at loss
 
 
 class TennisPlayingModel:
@@ -39,17 +38,28 @@ class TennisPlayingModel:
         self.agent_rewards = [[] for i in range(self.num_agents)]
         self.scores = []
         self.scores_deque = deque(maxlen=100)
-        self.rolling_avg_score = 0.0
+        self.rolling_score_averages = []
         
         # Hyperparameters
+        # self.number_of_episodes = num_episodes
+        # self.episode_length = 500
+        # self.batch_size = 256
+        # self.save_interval = 100
+        # self.episode_per_update = 1
+        # self.episodes_in_replay = 1e6
+        # self.discount_factor = 0.95
+        # self.lr_actor = 1e-4
+        # self.lr_critic = 1e-3
+        # self.tau = 1e-3
+
         self.number_of_episodes = num_episodes
         self.episode_length = 500
-        self.batch_size = 256
-        self.save_interval = 100
+        self.save_interval = 25
         self.episode_per_update = 1
         self.episodes_in_replay = 1e6
+        self.batch_size = 128
         self.discount_factor = 0.95
-        self.lr_actor = 1e-4
+        self.lr_actor = 1e-3
         self.lr_critic = 1e-3
         self.tau = 1e-3
 
@@ -75,7 +85,7 @@ class TennisPlayingModel:
         # Exploration noise
         # Controls how much OU Noise is applied
         self.noise = 2
-        self.noise_reduction = 0.9999
+        self.noise_reduction = 0.9995
 
         # Options
         self.save_gifs = save_gifs
@@ -116,7 +126,7 @@ class TennisPlayingModel:
                 os.path.join(self.model_dir, 'episode-{}.gif'.format(episode)), frames, duration=.04
             )
     
-    def train(self):
+    def train(self, stop_on_solve=False):
         widget = [
             "Episode: ", pb.Counter(), '/' , str(self.number_of_episodes), ' ', 
             pb.Percentage(), ' ', pb.ETA(), ' ', pb.Bar(marker=pb.RotatingMarker()), ' ', 
@@ -129,7 +139,8 @@ class TennisPlayingModel:
 
         for i_episode in range(1, self.number_of_episodes+1):
             # Update progress bar
-            widget[12] = pb.FormatLabel(str(self.rolling_avg_score)[:7])
+            current_average = 0.0 if i_episode == 1 else self.rolling_score_averages[-1]
+            widget[12] = pb.FormatLabel(str(current_average)[:7])
             timer.update(i_episode)
 
             # Reset OU Noise
@@ -146,10 +157,8 @@ class TennisPlayingModel:
             save_info = ((i_episode % self.save_interval) == 0 or i_episode == self.number_of_episodes)
 
             for episode_t in range(self.episode_length):
-                actions = self.maddpg.step(observation, noise=self.noise)
-                actions_array = torch.stack(actions).detach().numpy()
-                actions = np.rollaxis(actions_array, 1)
-                actions = np.clip(actions, -1, 1)
+                actions = self.maddpg.take_action(observation, noise=self.noise)
+                actions = torch.stack(actions).detach().numpy()
                 actions_full = np.reshape(actions, (1, self.action_size * self.num_agents))
                 self.noise *= self.noise_reduction
 
@@ -186,13 +195,16 @@ class TennisPlayingModel:
             max_episode_score = np.max(episode_rewards)
             self.scores_deque.append(max_episode_score)
             self.scores.append(max_episode_score)
-            self.rolling_avg_score = np.mean(self.scores_deque)
+            self.rolling_score_averages.append(np.mean(self.scores_deque))
 
-            if self.rolling_avg_score >= 0.5 and not solved:
+            if self.rolling_score_averages[-1] >= 0.5 and not solved:
                 print('\nEnvironment solved in {:d} episodes!\tAverage Score: {:.2f}'.format(
-                    i_episode, self.rolling_avg_score
+                    i_episode, self.rolling_score_averages[-1]
                 ))
                 solved = True
+                if stop_on_solve:
+                    self.save_model(i_episode)
+                    break
 
             if self.logger:
                 if i_episode % 100 == 0 or i_episode == self.number_of_episodes:
@@ -220,6 +232,7 @@ class TennisPlayingModel:
         else:
             # Plot the oficial reward of each episode
             plt.plot(np.arange(1, len(self.scores) + 1), self.scores, label="Score")
+            plt.plot(np.arange(1, len(self.rolling_score_averages) + 1), self.rolling_score_averages, label="Rolling Average")
         
         plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
         plt.ylabel("Score")
@@ -248,7 +261,7 @@ class TennisPlayingModel:
             scores = np.zeros(self.num_agents)
             
             while True:
-                actions = self.maddpg.act(observations)
+                actions = self.maddpg.take_action(observations)
                 actions_array = torch.stack(actions).detach().numpy()
                 actions = np.rollaxis(actions_array, 1)
                 actions = np.clip(actions, -1, 1)

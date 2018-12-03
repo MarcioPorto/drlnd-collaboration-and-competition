@@ -40,24 +40,21 @@ class MADDPG:
         """Get target_actors of all the agents in the MADDPG object"""
         return [ddpg_agent.target_actor for ddpg_agent in self.maddpg_agents]
 
-    def step(self, observations_full, noise=0.0):
+    def take_action(self, observations, noise=0.0):
         """Get actions from all agents in the MADDPG object"""
-        observations_full = torch.from_numpy(observations_full).float().to(self.device)
-        return [agent.act(observation, noise) for agent, observation in zip(self.maddpg_agents, observations_full)]
+        observations = torch.from_numpy(observations).float().to(self.device)
+        return [agent.act(observation, noise) for agent, observation in zip(self.maddpg_agents, observations)]
 
-    # def target_act(self, observations, noise=0.0):
-    #     """Get target network actions from all the agents in the MADDPG object """
-    #     num_observations = observations.shape[0]
-    #     actions = np.zeros((num_observations, self.num_agents * self.action_size))
-    #     for i, observation in enumerate(observations):
-    #         for a_i, agent in enumerate(self.maddpg_agents):
-    #             start = a_i * 2
-    #             end = start + 2
-    #             actions[i, start:end] = agent.target_act(observation, noise).cpu().data.numpy()
-    #     return torch.from_numpy(actions).float().to(self.device)
+    def act(self, observations, agent, noise=0.0):
+        """Get actions from a given agent in the MADDPG object """
+        num_observations = observations.shape[0]
+        actions = np.zeros((num_observations, self.action_size))
+        for i, observation in enumerate(observations):
+            actions[i, :] = agent.act(observation, noise).cpu().data.numpy()
+        return torch.from_numpy(actions).float().to(self.device)
 
     def target_act(self, observations, agent, noise=0.0):
-        """Get target network actions from all the agents in the MADDPG object """
+        """Get target network actions from a given agent in the MADDPG object """
         num_observations = observations.shape[0]
         actions = np.zeros((num_observations, self.action_size))
         for i, observation in enumerate(observations):
@@ -65,11 +62,16 @@ class MADDPG:
         return torch.from_numpy(actions).float().to(self.device)
 
     def consolidate_actions(self, actions_full, new_action, agent_number):
-        # TODO: Fix: Not extendable to more than 2 agents
+        """Replaces new_action into actions_full for the agent being updated"""
+        start = agent_number * 2
+        end = start + 2
+        
         if agent_number == 0:
-            return torch.cat((new_action, actions_full[:, 2:]), dim=1)
+            return torch.cat((new_action, actions_full[:, end:]), dim=1)
+        elif end == actions_full.shape[1]:
+            return torch.cat((actions_full[:, :start], new_action), dim=1)
         else:
-            return torch.cat((actions_full[:, :2], new_action), dim=1)
+            return torch.cat((actions_full[:, :start], new_action, actions_full[:, end:]), dim=1)
 
     def update(self, experiences, agent_number, logger=None):        
         """Update the critics and actors of all the agents"""
@@ -102,12 +104,13 @@ class MADDPG:
         agent.critic_optimizer.step()
 
         ### UPDATE ACTOR
-        # make input to agent
+        
         # TODO: Refactor this into its own function?
-        q_input = np.zeros((num_observations, self.action_size))
-        for i, observation in enumerate(observations):
-            q_input[i, :] = agent.actor(observation).cpu().data.numpy()
-        q_input = torch.from_numpy(q_input).float().to(self.device)
+        # q_input = np.zeros((num_observations, self.action_size))
+        # for i, observation in enumerate(observations):
+        #     q_input[i, :] = agent.actor(observation).cpu().data.numpy()
+        # q_input = torch.from_numpy(q_input).float().to(self.device)
+        q_input = self.act(observations, agent)
         q_input = self.consolidate_actions(actions_full, q_input, agent_number)
         q_input2 = torch.cat((observations_full, q_input), dim=1)
 

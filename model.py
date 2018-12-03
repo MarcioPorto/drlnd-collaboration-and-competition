@@ -13,23 +13,22 @@ def hidden_init(layer):
 
 class Network(nn.Module):
     def __init__(self, input_dim, hidden_in_dim, hidden_out_dim, output_dim, 
-                 actor=False, activation_fn=f.relu):
+                 actor=False):
         """Network definition shared by actor and critic"""
         super(Network, self).__init__()
 
-        self.activation_fn = activation_fn
         self.actor = actor
+        
         self.fc1 = nn.Linear(input_dim, hidden_in_dim)
+        self.fc2 = nn.Linear(hidden_in_dim, hidden_out_dim)
+        self.fc3 = nn.Linear(hidden_out_dim, output_dim)
 
         # if self.actor:
         #     self.fc2 = nn.Linear(hidden_in_dim, hidden_out_dim)
         # else:
         #     # add action to second layer in the critic
         #     self.fc2 = nn.Linear(hidden_in_dim + output_dim, hidden_out_dim)
-
-        self.fc2 = nn.Linear(hidden_in_dim, hidden_out_dim)
-
-        self.fc3 = nn.Linear(hidden_out_dim, output_dim)
+        
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -38,9 +37,15 @@ class Network(nn.Module):
         self.fc3.weight.data.uniform_(-1e-3, 1e-3)
 
     def forward(self, state, action=None):
-        h1 = self.activation_fn(self.fc1(state))
-        h2 = self.activation_fn(self.fc2(h1))
+        h1 = f.relu(self.fc1(state))
+        h2 = f.relu(self.fc2(h1))
         h3 = self.fc3(h2)
+
+        if self.actor:
+            h3 = torch.tanh(h3)
+
+        return h3
+
         # if self.actor:
         #     h1 = self.activation_fn(self.fc1(state))
         #     h2 = self.activation_fn(self.fc2(h1))
@@ -50,4 +55,3 @@ class Network(nn.Module):
         #     h1a = torch.cat((h1, action), dim=1)
         #     h2 = self.activation_fn(self.fc2(h1a))
         #     h3 = self.fc3(h2)
-        return h3

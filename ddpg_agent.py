@@ -29,8 +29,10 @@ class DDPGAgent:
 
     def act(self, state, noise=0.0):
         state = state.to(self.device)
-        return self.actor(state) + noise * self.noise.sample()
+        actions = self.actor(state) + noise * self.noise.sample()
+        return torch.clamp(actions, -1, 1)
 
     def target_act(self, state, noise=0.0):
         state = state.to(self.device)
-        return self.target_actor(state) + noise * self.noise.sample()
+        actions = self.target_actor(state) + noise * self.noise.sample()
+        return torch.clamp(actions, -1, 1)
