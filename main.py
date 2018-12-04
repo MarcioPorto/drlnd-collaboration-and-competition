@@ -44,6 +44,7 @@ class TennisPlayingModel:
         self.scores = []
         self.scores_deque = deque(maxlen=100)
         self.rolling_score_averages = []
+        self.best_score = 0.0
         
         # Hyperparameters
         self.number_of_episodes = num_episodes
@@ -191,7 +192,13 @@ class TennisPlayingModel:
             self.scores.append(max_episode_score)
             self.rolling_score_averages.append(np.mean(self.scores_deque))
 
-            if self.rolling_score_averages[-1] >= 0.5 and not solved:
+            if self.rolling_score_averages[-1] > self.best_score:
+                self.best_score = self.rolling_score_averages[-1]
+                if solved:
+                    # This model is better than a previously saved model, so we'll save it
+                    self.save_model(i_episode)
+
+            if self.rolling_score_averages[-1] >= 0.5: and not solved:
                 print('\nEnvironment solved in {:d} episodes!\tAverage Score: {:.2f}'.format(
                     i_episode, self.rolling_score_averages[-1]
                 ))
@@ -200,13 +207,13 @@ class TennisPlayingModel:
                     self.save_model(i_episode)
                     break
 
+            if save_info and not solved:
+                self.save_model(i_episode)
+
             if self.logger:
                 if i_episode % 100 == 0 or i_episode == self.number_of_episodes:
                     for score in self.scores_deque:
                         self.logger.add_scalar("rolling_score" % a_i, score, episode)
-
-            if save_info:
-                self.save_model(i_episode)
         
         timer.finish()
 
