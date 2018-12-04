@@ -13,7 +13,7 @@ The files in this reporsitory implement a [MADDPG](https://papers.nips.cc/paper/
 The mechanics of this environment are as follows:
 
 - *Rewards*: An agent receives a reward of +0.1 if it hits the ball over the net. If the agent lets the ball hit the ground or hits the ball out of bounds, it receives a reward of -0.1.
-- *State space*: 8 variables describing position and velocity of the ball and racket. Importantly, each agent receives its own local observation.
+- *State space*: 24 variables describing position and velocity of the ball and racket. Importantly, each agent receives its own local observation.
 - *Action space*: Vector of 2 numbers corresponding to movement along the x and y axis.
 
 The environment is considered solved, when the average (over 100 episodes) of the agents' scores is at least +0.5. The score for each episode is just the maximum score (without discounting) from either agent.
@@ -32,7 +32,7 @@ The environment is considered solved, when the average (over 100 episodes) of th
 
 3. Place the downloaded file(s) in the folder you cloned this repo to and unzip (or decompress) the file.
 
-4. Create a Python environment for this project. I recommend using `conda` or `venv`.
+4. Create and activate a Python environment for this project. I recommend using `conda` or `venv`.
 
 5. Activate that environment and install dependencies: 
     ```
@@ -41,9 +41,11 @@ The environment is considered solved, when the average (over 100 episodes) of th
 
 ## Instructions
 
-1. Open the `Tennis.ipynb` notebook and adjust the path to your desired environment file based on its name and where you placed it.
+1. Run `jupyter notebook` and open the `Tennis.ipynb` notebook. 
 
-2. You are ready to start interacting with the environment.
+2. Adjust the path to your desired environment file based on its name and where you placed it.
+
+3. You are ready to start interacting with the environment.
     - Use the cells in sections 1, 2 and 3 to initialize and explore the environment
     - Run the cells in section 4 to train the agent. Feel free to change the hyperparameters in `main.py` to see if you can improve training.
     - Run the cells in section 5 to test the trained agent.

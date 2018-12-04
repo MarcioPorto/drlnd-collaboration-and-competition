@@ -17,6 +17,11 @@ from utils import transpose_list, transpose_to_tensor
 # NOTE: If not solved fast enough, play around with tau and batch_size in order to finish faster
 # NOTE: If input values are far from 1, use batch norm; but if they're only a bit bigger it shouldn't matter too much
 # NOTE: Read the paper
+# NOTE: More frequent updates
+# NOTE: Smaller neural network
+
+# TODO: Add mechanism to only save model if better score than previous save
+# TODO: Change plot axis
 
 
 class TennisPlayingModel:
@@ -41,25 +46,14 @@ class TennisPlayingModel:
         self.rolling_score_averages = []
         
         # Hyperparameters
-        # self.number_of_episodes = num_episodes
-        # self.episode_length = 500
-        # self.batch_size = 256
-        # self.save_interval = 100
-        # self.episode_per_update = 1
-        # self.episodes_in_replay = 1e6
-        # self.discount_factor = 0.95
-        # self.lr_actor = 1e-4
-        # self.lr_critic = 1e-3
-        # self.tau = 1e-3
-
         self.number_of_episodes = num_episodes
-        self.episode_length = 500
+        self.episode_length = 1000
         self.save_interval = 25
-        self.episode_per_update = 1
-        self.episodes_in_replay = 1e6
+        self.update_every = 2
+        self.episodes_in_replay = 3e4
         self.batch_size = 128
-        self.discount_factor = 0.95
-        self.lr_actor = 1e-3
+        self.discount_factor = 0.99
+        self.lr_actor = 1e-4
         self.lr_critic = 1e-3
         self.tau = 1e-3
 
@@ -76,16 +70,11 @@ class TennisPlayingModel:
         )
         self.buffer = ReplayBuffer(
             action_size=self.action_size, 
-            buffer_size=int(self.episodes_in_replay * self.episode_length), 
+            buffer_size=int(self.episodes_in_replay), 
             batch_size=self.batch_size, 
             seed=seed,
             device=self.device
         )
-
-        # Exploration noise
-        # Controls how much OU Noise is applied
-        self.noise = 2
-        self.noise_reduction = 0.9995
 
         # Options
         self.save_gifs = save_gifs
@@ -136,6 +125,7 @@ class TennisPlayingModel:
         
         self.agent_rewards = [[] for i in range(self.num_agents)]  # Clear agent rewards
         solved = False
+        t_step = 0
 
         for i_episode in range(1, self.number_of_episodes+1):
             # Update progress bar
@@ -156,11 +146,12 @@ class TennisPlayingModel:
             # Save info once every save_interval steps or if last episode
             save_info = ((i_episode % self.save_interval) == 0 or i_episode == self.number_of_episodes)
 
-            for episode_t in range(self.episode_length):
-                actions = self.maddpg.take_action(observation, noise=self.noise)
+            for episdode_step in range(1, self.episode_length+1):
+                t_step += 1
+
+                actions = self.maddpg.take_action(observation, noise=True)
                 actions = torch.stack(actions).detach().numpy()
                 actions_full = np.reshape(actions, (1, self.action_size * self.num_agents))
-                self.noise *= self.noise_reduction
 
                 env_info = self.env.step(actions)[self.brain_name]
                 next_observation = env_info.vector_observations
@@ -168,30 +159,33 @@ class TennisPlayingModel:
                 rewards = env_info.rewards
                 dones = env_info.local_done
 
+                # Add experience to shared replay buffer
                 for i in range(self.num_agents):
                     self.buffer.add(
                         observation[i], observation_full, 
                         actions[i], actions_full, rewards[i], 
                         next_observation[i], next_observation_full, dones[i]
                     )
+                
+                # Learn from experience
+                if len(self.buffer) > self.batch_size and t_step % self.update_every == 0:
+                    # Update each agent separately
+                    for a_i in range(self.num_agents):
+                        samples = self.buffer.sample()
+                        self.maddpg.update(samples, a_i, self.logger)
+                    self.maddpg.update_targets()
 
                 episode_rewards += rewards
                 observation, observation_full = next_observation, next_observation_full
 
                 if np.any(dones):
                     break
-
-            # Update once after every episode_per_update
-            if len(self.buffer) > self.batch_size and i_episode % self.episode_per_update == 0:
-                for a_i in range(self.num_agents):
-                    samples = self.buffer.sample()
-                    self.maddpg.update(samples, a_i, self.logger)
-                self.maddpg.update_targets()
             
             # Save rewards from this episode
             for i in range(self.num_agents):
                 self.agent_rewards[i].append(episode_rewards[i])
 
+            # Update rewards tally
             max_episode_score = np.max(episode_rewards)
             self.scores_deque.append(max_episode_score)
             self.scores.append(max_episode_score)
@@ -262,9 +256,7 @@ class TennisPlayingModel:
             
             while True:
                 actions = self.maddpg.take_action(observations)
-                actions_array = torch.stack(actions).detach().numpy()
-                actions = np.rollaxis(actions_array, 1)
-                actions = np.clip(actions, -1, 1)
+                actions = torch.stack(actions).detach().numpy()
                 env_info = self.env.step(actions)[self.brain_name]
                 next_observations = env_info.vector_observations
                 rewards = env_info.rewards

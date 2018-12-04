@@ -18,15 +18,16 @@ class MADDPG:
         self.action_size = action_size
         self.observation_size = observation_size
 
-        # Critic needs observation from all agents + their individual actions
+        # Critic needs observation from all agents and all individual actions (added in the second hidden layer)
         in_critic = (observation_size + action_size) * self.num_agents
+        # in_critic = observation_size * self.num_agents
+        critic_action_size = action_size * self.num_agents
 
         self.maddpg_agents = []
         for _ in range(self.num_agents):
             self.maddpg_agents.append(
-                DDPGAgent(in_actor=observation_size, hidden_in_actor=600, hidden_out_actor=400, out_actor=action_size, 
-                        #   in_critic=observation_size, hidden_in_critic=600, hidden_out_critic=400,
-                          in_critic=in_critic, hidden_in_critic=600, hidden_out_critic=400,
+                DDPGAgent(in_actor=observation_size, out_actor=action_size,
+                          in_critic=in_critic, critic_action_size=critic_action_size,
                           device=self.device, lr_actor=lr_actor, lr_critic=lr_critic)
             )
 
@@ -40,85 +41,74 @@ class MADDPG:
         """Get target_actors of all the agents in the MADDPG object"""
         return [ddpg_agent.target_actor for ddpg_agent in self.maddpg_agents]
 
-    def take_action(self, observations, noise=0.0):
+    def take_action(self, observations, noise=False):
         """Get actions from all agents in the MADDPG object"""
-        observations = torch.from_numpy(observations).float().to(self.device)
-        return [agent.act(observation, noise) for agent, observation in zip(self.maddpg_agents, observations)]
+        observations = torch.from_numpy(observations).float().to(self.device)        
+        return [agent.take_action(observation, noise) for agent, observation in zip(self.maddpg_agents, observations)]
 
-    def act(self, observations, agent, noise=0.0):
+    def act(self, observations_full, noise=False):
         """Get actions from a given agent in the MADDPG object """
-        num_observations = observations.shape[0]
-        actions = np.zeros((num_observations, self.action_size))
-        for i, observation in enumerate(observations):
-            actions[i, :] = agent.act(observation, noise).cpu().data.numpy()
-        return torch.from_numpy(actions).float().to(self.device)
+        num_observations = observations_full.shape[0]
+        actions = np.zeros((num_observations, self.num_agents * self.action_size))
+        observations_full = observations_full.reshape(-1, 2, 24)
 
-    def target_act(self, observations, agent, noise=0.0):
-        """Get target network actions from a given agent in the MADDPG object """
-        num_observations = observations.shape[0]
-        actions = np.zeros((num_observations, self.action_size))
-        for i, observation in enumerate(observations):
-            actions[i, :] = agent.target_act(observation, noise).cpu().data.numpy()
-        return torch.from_numpy(actions).float().to(self.device)
-
-    def consolidate_actions(self, actions_full, new_action, agent_number):
-        """Replaces new_action into actions_full for the agent being updated"""
-        start = agent_number * 2
-        end = start + 2
+        for a_i, agent in enumerate(self.maddpg_agents):
+            for i, observation in enumerate(observations_full[a_i]):
+                start = a_i * 2
+                end = start + 2
+                actions[i, start:end] = agent.act(observation, noise).cpu().data.numpy()
         
-        if agent_number == 0:
-            return torch.cat((new_action, actions_full[:, end:]), dim=1)
-        elif end == actions_full.shape[1]:
-            return torch.cat((actions_full[:, :start], new_action), dim=1)
-        else:
-            return torch.cat((actions_full[:, :start], new_action, actions_full[:, end:]), dim=1)
+        return torch.from_numpy(actions).float().to(self.device)
+
+    def target_act(self, observations_full, noise=False):
+        """Get target network actions from a given agent in the MADDPG object """
+        num_observations = observations_full.shape[0]
+        actions = np.zeros((num_observations, self.num_agents * self.action_size))
+        observations_full = observations_full.reshape(-1, 2, 24)
+
+        for a_i, agent in enumerate(self.maddpg_agents):
+            for i, observation in enumerate(observations_full[a_i]):
+                start = a_i * 2
+                end = start + 2
+                actions[i, start:end] = agent.target_act(observation, noise).cpu().data.numpy()
+
+        return torch.from_numpy(actions).float().to(self.device)
 
     def update(self, experiences, agent_number, logger=None):        
         """Update the critics and actors of all the agents"""
         (observations, observations_full, actions, actions_full, 
          rewards, next_observations, next_observations_full, dones) = experiences
-        # observations, actions, rewards, next_observations, dones = experiences
 
         num_observations = observations.shape[0]
         agent = self.maddpg_agents[agent_number]
 
         ### UPDATE CRITIC
-        # target_actions = self.target_act(next_observations)
-        target_actions = self.target_act(next_observations, agent)
-        target_actions = self.consolidate_actions(actions_full, target_actions, agent_number)
-        target_critic_input = torch.cat((next_observations_full, target_actions), dim=1).to(self.device)
-
+        agent.critic_optimizer.zero_grad()
+        next_actions_full = self.target_act(next_observations_full)
+        target_critic_input = torch.cat((next_observations_full, next_actions_full), dim=1).to(self.device)
         with torch.no_grad():
-            # q_next = agent.target_critic(next_observations, target_actions)
+            # q_next = agent.target_critic(next_observations_full, next_actions_full)
             q_next = agent.target_critic(target_critic_input)
-
         y = rewards + (self.discount_factor * q_next * (1 - dones))
-        # q = agent.critic(observations, actions)
+        
+        # q = agent.critic(observations_full, actions_full)
         critic_input = torch.cat((observations_full, actions_full), dim=1).to(self.device)
         q = agent.critic(critic_input)
 
-        critic_loss = F.mse_loss(q, q_next)
-        agent.critic_optimizer.zero_grad()
+        # Minimize the loss
+        critic_loss = F.mse_loss(q, y)
         critic_loss.backward()
-        torch.nn.utils.clip_grad_norm_(agent.critic.parameters(), 1)
         agent.critic_optimizer.step()
 
         ### UPDATE ACTOR
-        
-        # TODO: Refactor this into its own function?
-        # q_input = np.zeros((num_observations, self.action_size))
-        # for i, observation in enumerate(observations):
-        #     q_input[i, :] = agent.actor(observation).cpu().data.numpy()
-        # q_input = torch.from_numpy(q_input).float().to(self.device)
-        q_input = self.act(observations, agent)
-        q_input = self.consolidate_actions(actions_full, q_input, agent_number)
-        q_input2 = torch.cat((observations_full, q_input), dim=1)
-
-        # actor_loss = - agent.critic(observations, q_input).mean()
-        actor_loss = - agent.critic(q_input2).mean()
         agent.actor_optimizer.zero_grad()
+        actions_pred_full = self.act(observations_full)
+        critic_input = torch.cat((observations_full, actions_pred_full), dim=1)
+        
+        # Minimize the loss
+        # actor_loss = - agent.critic(observations_full, actions_pred_full).mean()
+        actor_loss = - agent.critic(critic_input).mean()
         actor_loss.backward()
-        torch.nn.utils.clip_grad_norm_(agent.actor.parameters(), 1)
         agent.actor_optimizer.step()
 
         ### LOGGING
