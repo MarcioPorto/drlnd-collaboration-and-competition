@@ -33,7 +33,7 @@ RANDOM_SEED = 0
 BUFFER_SIZE = int(1e6)  # replay buffer size
 BATCH_SIZE = 512        # minibatch size
 GAMMA = 0.99            # discount factor
-TAU = 5e-2              # for soft update of target parameters
+TAU = 1e-1              # for soft update of target parameters
 LR_ACTOR = 1e-4         # learning rate of the actor 
 LR_CRITIC = 3e-4        # learning rate of the critic
 WEIGHT_DECAY = 0.0      # L2 weight decay
@@ -47,3 +47,25 @@ STATE_SIZE = 24
 ACTION_SIZE = 2
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+
+
+
+
+
+
+""" 512 x 256 with states and actions concated right away
+No batch norm
+Gradient clippint or no gradient clipping
+
+BUFFER_SIZE = int(1e6)
+BATCH_SIZE = 512
+GAMMA = 0.99
+TAU = 5e-2
+LR_ACTOR = 1e-4 
+LR_CRITIC = 3e-4
+WEIGHT_DECAY = 0.0
+UPDATE_EVERY = 4
+NOISE_AMPLIFICATION = 1
+NOISE_AMPLIFICATION_DECAY = 1
+"""

@@ -59,7 +59,7 @@ class MADDPGAgent():
                 experiences = self.memory.sample()
                 self.learn(experiences, a_i)
             
-    def learn(self, experiences, a_i):
+    def learn(self, experiences, agent_number):
         """ This must be done here because the `learn` step in DDPG is not aware of the other agents """
         next_actions = []
         actions_pred = []
@@ -80,7 +80,8 @@ class MADDPGAgent():
         next_actions = torch.cat(next_actions, dim=1).to(device)
         actions_pred = torch.cat(actions_pred, dim=1).to(device)
         
-        agent.learn(experiences, a_i, next_actions, actions_pred)
+        agent = self.agents[agent_number]
+        agent.learn(experiences, next_actions, actions_pred)
             
     def save_model(self):
         for i in range(self.num_agents):
