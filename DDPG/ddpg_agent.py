@@ -47,7 +47,7 @@ class DDPGAgent():
         self.memory = ReplayBuffer(action_size, BUFFER_SIZE, BATCH_SIZE)
         
         # Directory where to save the model
-        self.model_dir = os.getcwd() + "/saved_models"
+        self.model_dir = os.getcwd() + "/DDPG/saved_models"
         os.makedirs(self.model_dir, exist_ok=True)
 
     def step(self, states, actions, rewards, next_states, dones):
@@ -135,6 +135,7 @@ class DDPGAgent():
             target_param.data.copy_(tau * local_param.data + (1.0 - tau) * target_param.data)
             
     def save_model(self):
+        """Saves model weights to file."""
         torch.save(
             self.actor_local.state_dict(), 
             os.path.join(self.model_dir, 'actor_params.pth')
@@ -150,4 +151,19 @@ class DDPGAgent():
         torch.save(
             self.critic_optimizer.state_dict(), 
             os.path.join(self.model_dir, 'critic_optim_params.pth')
+        )
+
+    def load_model(self):
+        """Loads weights from saved model."""
+        self.actor_local.load_state_dict(
+            torch.load(os.path.join(self.model_dir, 'actor_params.pth'))
+        )
+        self.actor_optimizer.load_state_dict(
+            torch.load(os.path.join(self.model_dir, 'actor_optim_params.pth'))
+        )
+        self.critic_local.load_state_dict(
+            torch.load(os.path.join(self.model_dir, 'critic_params.pth'))
+        )
+        self.critic_optimizer.load_state_dict(
+            torch.load(os.path.join(self.model_dir, 'critic_optim_params.pth'))
         )
