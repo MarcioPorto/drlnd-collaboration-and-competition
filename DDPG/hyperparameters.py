@@ -2,14 +2,13 @@ import torch
 
 
 RANDOM_SEED = 0
-BUFFER_SIZE = int(1e5)  # replay buffer size
-BATCH_SIZE = 512        # minibatch size (64 in original paper)
+BUFFER_SIZE = int(1e5)  # replay buffer size (1e6 in original paper)
+BATCH_SIZE = 1024       # minibatch size (64 in original paper)
 GAMMA = 0.9             # discount factor
 TAU = 1e-2              # for soft update of target parameters
 LR_ACTOR = 1e-3         # learning rate of the actor 
 LR_CRITIC = 1e-3        # learning rate of the critic
-WEIGHT_DECAY = 0.0      # L2 weight decay
-UPDATE_EVERY = 2
+WEIGHT_DECAY = 0        # L2 weight decay (1e-2  in original paper)
 
 # Environment Information
 NUM_AGENTS = 2
