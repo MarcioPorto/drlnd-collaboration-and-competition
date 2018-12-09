@@ -4,6 +4,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from MADDPG.hyperparameters import *
+
 
 def hidden_init(layer):
     fan_in = layer.weight.data.size()[0]
@@ -14,7 +16,7 @@ def hidden_init(layer):
 class Actor(nn.Module):
     """Actor (Policy) Model."""
 
-    def __init__(self, state_size, action_size, fc1_units=128, fc2_units=128):
+    def __init__(self, state_size, action_size, fc1_units=512, fc2_units=256):
         """Initialize parameters and build model.
         Params
         ======
@@ -45,7 +47,7 @@ class Actor(nn.Module):
 class Critic(nn.Module):
     """Critic (Value) Model."""
 
-    def __init__(self, state_size, action_size, fcs1_units=128, fc2_units=128):
+    def __init__(self, state_size, action_size, fcs1_units=512, fc2_units=256):
         """Initialize parameters and build model.
         Params
         ======
@@ -56,10 +58,10 @@ class Critic(nn.Module):
         """
         super(Critic, self).__init__()
         self.seed = torch.manual_seed(RANDOM_SEED)
-        self.fcs1 = nn.Linear(state_size * NUM_AGENTS, fcs1_units)
-        self.fc2 = nn.Linear(fcs1_units + (action_size * NUM_AGENTS), fc2_units)
-#         self.fcs1 = nn.Linear((state_size + action_size) * NUM_AGENTS, fcs1_units)
-#         self.fc2 = nn.Linear(fcs1_units, fc2_units)
+        # self.fcs1 = nn.Linear(state_size * NUM_AGENTS, fcs1_units)
+        # self.fc2 = nn.Linear(fcs1_units + (action_size * NUM_AGENTS), fc2_units)
+        self.fcs1 = nn.Linear((state_size + action_size) * NUM_AGENTS, fcs1_units)
+        self.fc2 = nn.Linear(fcs1_units, fc2_units)
         self.fc3 = nn.Linear(fc2_units, 1)
         self.reset_parameters()
 
@@ -70,10 +72,10 @@ class Critic(nn.Module):
 
     def forward(self, state, action):
         """Build a critic (value) network that maps (state, action) pairs -> Q-values."""
-        xs = F.relu(self.fcs1(state))
-        x = torch.cat((xs, action), dim=1)
+        # xs = F.relu(self.fcs1(state))
+        # x = torch.cat((xs, action), dim=1)
+        # x = F.relu(self.fc2(x))
+        xs = torch.cat((state, action), dim=1)
+        x = F.relu(self.fcs1(xs))
         x = F.relu(self.fc2(x))
-#         xs = torch.cat((state, action), dim=1)
-#         x = F.relu(self.fcs1(xs))
-#         x = F.relu(self.fc2(x))
         return self.fc3(x)

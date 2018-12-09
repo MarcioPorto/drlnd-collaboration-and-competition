@@ -1,8 +1,9 @@
 import torch
 
 
-# TODO: Add hyperparameters
 RANDOM_SEED = 0
+
+
 # # # 200 x 150
 # BUFFER_SIZE = int(1e6)  # replay buffer size
 # BATCH_SIZE = 512        # minibatch size
@@ -27,20 +28,18 @@ RANDOM_SEED = 0
 # 5e-4 LRs works quite well
 # 5e-4, 2e-3
 
-BUFFER_SIZE = int(1e5)  # replay buffer size
+# 128x128 model
+
+BUFFER_SIZE = int(1e6)  # replay buffer size
 BATCH_SIZE = 512        # minibatch size
-GAMMA = 0.95            # discount factor
+GAMMA = 0.99            # discount factor
 TAU = 5e-2              # for soft update of target parameters
-LR_ACTOR = 5e-4         # learning rate of the actor 
-LR_CRITIC = 2e-3        # learning rate of the critic
+LR_ACTOR = 1e-4         # learning rate of the actor 
+LR_CRITIC = 3e-4        # learning rate of the critic
 WEIGHT_DECAY = 0.0      # L2 weight decay
-UPDATE_EVERY = 2
-NUM_AGENTS = num_agents
-STATE_SIZE = int(state_size)  # this environment has 3 time frames stacked together as its state
-ACTION_SIZE = action_size
+UPDATE_EVERY = 4
 NOISE_AMPLIFICATION = 1
 NOISE_AMPLIFICATION_DECAY = 1
-
 
 # Environment Information
 NUM_AGENTS = 2

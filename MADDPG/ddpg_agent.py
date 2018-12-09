@@ -39,26 +39,29 @@ class DDPGAgent():
         self.critic_target = Critic(state_size, action_size).to(device)
         self.critic_optimizer = optim.Adam(self.critic_local.parameters(), lr=LR_CRITIC, weight_decay=WEIGHT_DECAY)
 
+        self.hard_update(self.actor_local, self.actor_target)
+        self.hard_update(self.critic_local, self.critic_target)
+
         self.noise = OUNoise(action_size)
-        
+
         self.noise_amplification = NOISE_AMPLIFICATION
         self.noise_amplification_decay = NOISE_AMPLIFICATION_DECAY
-        
+
         self._print_network()
 
-    def act(self, state, add_noise=True):
+    def act(self, state, add_noise=False):
         """Returns actions for given state as per current policy."""
         state = torch.from_numpy(state).float().to(device)
-        
+
         self.actor_local.eval()
         with torch.no_grad():
             action = self.actor_local(state).cpu().data.numpy()
         self.actor_local.train()
-        
+
         if add_noise:
             action += self.noise.sample()
             self._decay_noise_amplification()
-        
+
         return np.clip(action, -1, 1)
 
     def reset(self):
@@ -83,28 +86,27 @@ class DDPGAgent():
         with torch.no_grad():
             Q_targets_next = self.critic_target(next_states, next_actions)        
         Q_targets = rewards.index_select(1, agent_id_tensor) + (GAMMA * Q_targets_next * (1 - dones.index_select(1, agent_id_tensor)))
-        
         Q_expected = self.critic_local(states, actions)
-        
         # Minimize the loss
         critic_loss = F.mse_loss(Q_expected, Q_targets)
         critic_loss.backward()
         torch.nn.utils.clip_grad_norm_(self.critic_local.parameters(), 1)
         self.critic_optimizer.step()
 
-
         ### Update actor
         self.actor_optimizer.zero_grad()
-        
         # Minimize the loss
         actor_loss = -self.critic_local(states, actions_pred).mean()
         actor_loss.backward()
         self.actor_optimizer.step()
 
-
         ### Update target networks
         self.soft_update(self.critic_local, self.critic_target, TAU)
         self.soft_update(self.actor_local, self.actor_target, TAU)
+
+    def hard_update(self, local_model, target_model):
+        for target_param, local_param in zip(target_model.parameters(), local_model.parameters()):
+            target_param.data.copy_(local_param.data)
 
     def soft_update(self, local_model, target_model, tau):
         """Soft update model parameters.

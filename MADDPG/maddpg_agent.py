@@ -29,7 +29,7 @@ class MADDPGAgent():
         self.t_step = 0
         
         # Directory where to save the model
-        self.model_dir = os.getcwd() + "/saved_models"
+        self.model_dir = os.getcwd() + "/MADDPG/saved_models"
         os.makedirs(self.model_dir, exist_ok=True)
     
     def reset(self):
@@ -37,10 +37,10 @@ class MADDPGAgent():
         for agent in self.agents:
             agent.reset()
             
-    def act(self, observations, add_noise=True):
+    def act(self, observations, add_noise=False):
         actions = []
         for agent, observation in zip(self.agents, observations):
-            action = agent.act(observation, add_noise=True)
+            action = agent.act(observation, add_noise=add_noise)
             actions.append(action)
         return np.array(actions)
     
@@ -53,7 +53,6 @@ class MADDPGAgent():
         self.memory.add(states, actions, rewards, next_states, dones)
         
         self.t_step = (self.t_step + 1) % UPDATE_EVERY
-        
         # Learn, if enough samples are available in memory
         if len(self.memory) > BATCH_SIZE and self.t_step == 0:
             for a_i, agent in enumerate(self.agents):
