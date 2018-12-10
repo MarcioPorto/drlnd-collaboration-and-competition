@@ -14,7 +14,7 @@ from MADDPG.ou_noise import OUNoise
 from MADDPG.replay_buffer import ReplayBuffer
 
 
-class DDPGAgent():
+class DDPGAgent:
     """Interacts with and learns from the environment."""
     
     def __init__(self, state_size, action_size, agent_id):
@@ -85,19 +85,19 @@ class DDPGAgent():
         agent_id_tensor = torch.tensor([self.agent_id - 1]).to(device)
 
         ### Update critic
+        self.critic_optimizer.zero_grad()
         Q_targets_next = self.critic_target(next_states, next_actions)        
         Q_targets = rewards.index_select(1, agent_id_tensor) + (GAMMA * Q_targets_next * (1 - dones.index_select(1, agent_id_tensor)))
         Q_expected = self.critic_local(states, actions)
         # Minimize the loss
         critic_loss = F.mse_loss(Q_expected, Q_targets)
-        self.critic_optimizer.zero_grad()
         critic_loss.backward()
         self.critic_optimizer.step()
 
         ### Update actor
+        self.actor_optimizer.zero_grad()
         # Minimize the loss
         actor_loss = -self.critic_local(states, actions_pred).mean()
-        self.actor_optimizer.zero_grad()
         actor_loss.backward()
         self.actor_optimizer.step()
 

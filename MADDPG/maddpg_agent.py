@@ -15,7 +15,7 @@ from MADDPG.ou_noise import OUNoise
 from MADDPG.replay_buffer import ReplayBuffer
 
 
-class MADDPGAgent():
+class MADDPGAgent:
     """Wrapper class managing different agents in the environment."""
 
     def __init__(self, num_agents, state_size, action_size):
@@ -65,6 +65,7 @@ class MADDPGAgent():
         self.memory.add(states, actions, rewards, next_states, dones)
         
         self.t_step = (self.t_step + 1) % UPDATE_EVERY
+
         # Learn, if enough samples are available in memory
         if len(self.memory) > BATCH_SIZE and self.t_step == 0:
             for a_i, agent in enumerate(self.agents):
