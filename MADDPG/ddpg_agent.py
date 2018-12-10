@@ -18,13 +18,12 @@ class DDPGAgent():
     """Interacts with and learns from the environment."""
     
     def __init__(self, state_size, action_size, agent_id):
-        """Initialize an Agent object.
-        
+        """Initialize a DDPGAgent object.
         Params
         ======
             state_size (int): dimension of each state
             action_size (int): dimension of each action
-            num_agents (int): number of agents in the environment
+            agent_id (int): identifier for this agent
         """
         self.state_size = state_size
         self.action_size = action_size
@@ -39,6 +38,8 @@ class DDPGAgent():
         self.critic_target = Critic(state_size, action_size).to(device)
         self.critic_optimizer = optim.Adam(self.critic_local.parameters(), lr=LR_CRITIC, weight_decay=WEIGHT_DECAY)
 
+        # Make sure that the target-local model pairs are initialized to the 
+        # same weights
         self.hard_update(self.actor_local, self.actor_target)
         self.hard_update(self.critic_local, self.critic_target)
 
@@ -65,18 +66,20 @@ class DDPGAgent():
         return np.clip(action, -1, 1)
 
     def reset(self):
+        """Resets the OU Noise for this agent."""
         self.noise.reset()
         
     def learn(self, experiences, next_actions, actions_pred):
         """Update policy and value parameters using given batch of experience tuples.
         Q_targets = r + γ * critic_target(next_state, actor_target(next_state))
         where:
-            actor_target(state) -> action
-            critic_target(state, action) -> Q-value
+            actor_target(next_state) -> action
+            critic_target(next_state, next_action) -> Q-value
         Params
         ======
             experiences (Tuple[torch.Tensor]): tuple of (s, a, r, s', done) tuples 
-            gamma (float): discount factor
+            next_actions (list): next actions computed from each agent
+            actions_pred (list): prediction for actions for current states from each agent
         """
         states, actions, rewards, next_states, dones = experiences
         agent_id_tensor = torch.tensor([self.agent_id - 1]).to(device)
@@ -103,12 +106,19 @@ class DDPGAgent():
         self.soft_update(self.actor_local, self.actor_target, TAU)
 
     def hard_update(self, local_model, target_model):
+        """Hard update model parameters.
+        θ_target = θ_local
+        Params
+        ======
+            local_model: PyTorch model (weights will be copied from)
+            target_model: PyTorch model (weights will be copied to)
+        """
         for target_param, local_param in zip(target_model.parameters(), local_model.parameters()):
             target_param.data.copy_(local_param.data)
 
     def soft_update(self, local_model, target_model, tau):
         """Soft update model parameters.
-        θ_target = τ*θ_local + (1 - τ)*θ_target
+        θ_target = τ * θ_local + (1 - τ) * θ_target
         Params
         ======
             local_model: PyTorch model (weights will be copied from)
@@ -119,6 +129,7 @@ class DDPGAgent():
             target_param.data.copy_(tau * local_param.data + (1.0 - tau) * target_param.data)
     
     def _print_network(self):
+        """Helper to print network architecture for this agent's actors and critics."""
         print("Agent #{}".format(self.agent_id))
         print("Actor (Local):")
         print(self.actor_local)
@@ -132,4 +143,5 @@ class DDPGAgent():
             print("_______________________________________________________________")
             
     def _decay_noise_amplification(self):
+        """Helper for decaying exploration noise amplification."""
         self.noise_amplification *= self.noise_amplification_decay

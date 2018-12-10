@@ -16,7 +16,16 @@ from MADDPG.replay_buffer import ReplayBuffer
 
 
 class MADDPGAgent():
+    """Wrapper class managing different agents in the environment."""
+
     def __init__(self, num_agents, state_size, action_size):
+        """Initialize a MADDPGAgent wrapper.
+        Params
+        ======
+            num_agents (int): the number of agents in the environment
+            state_size (int): dimension of each state
+            action_size (int): dimension of each action
+        """
         self.num_agents = num_agents
         self.state_size = state_size
         self.action_size = action_size
@@ -26,6 +35,7 @@ class MADDPGAgent():
         # Replay memory
         self.memory = ReplayBuffer(action_size, BUFFER_SIZE, BATCH_SIZE)
         
+        # Will help to decide when to update the model weights
         self.t_step = 0
         
         # Directory where to save the model
@@ -33,11 +43,13 @@ class MADDPGAgent():
         os.makedirs(self.model_dir, exist_ok=True)
     
     def reset(self):
-        """Resets OU Noise"""
+        """Resets OU Noise for each agent."""
         for agent in self.agents:
             agent.reset()
             
     def act(self, observations, add_noise=False):
+        """Picks an action for each agent given their individual observations 
+        and the current policy."""
         actions = []
         for agent, observation in zip(self.agents, observations):
             action = agent.act(observation, add_noise=add_noise)
@@ -60,7 +72,13 @@ class MADDPGAgent():
                 self.learn(experiences, a_i)
             
     def learn(self, experiences, agent_number):
-        """ This must be done here because the `learn` step in DDPG is not aware of the other agents """
+        """Helper to pick actions from each agent for the `experiences` tuple that 
+        will be used to update the weights to agent with ID = `agent_number`.
+        Each observation in the `experiences` tuple contains observations from each 
+        agent, so before using the tuple of update the weights of an agent, we need 
+        all agents to contribute in generating `next_actions` and `actions_pred`. 
+        This happens because the critic will take as its input the combined 
+        observations and actions from all agents."""
         next_actions = []
         actions_pred = []
         states, _, _, next_states, _ = experiences
@@ -84,6 +102,7 @@ class MADDPGAgent():
         agent.learn(experiences, next_actions, actions_pred)
             
     def save_model(self):
+        """Saves model weights to file."""
         for i in range(self.num_agents):
             torch.save(
                 self.agents[i].actor_local.state_dict(), 
@@ -102,5 +121,22 @@ class MADDPGAgent():
                 os.path.join(self.model_dir, 'critic_optim_params_{}.pth'.format(i))
             )
     
+    def load_model(self):
+        """Loads weights from saved model."""
+        for i in range(self.num_agents):
+            self.agents[i].actor_local.load_state_dict(
+                torch.load(os.path.join(self.model_dir, 'actor_params_{}.pth'.format(i)))
+            )
+            self.agents[i].actor_optimizer.load_state_dict(
+                torch.load(os.path.join(self.model_dir, 'actor_optim_params_{}.pth'.format(i)))
+            )
+            self.agents[i].critic_local.load_state_dict(
+                torch.load(os.path.join(self.model_dir, 'critic_params_{}.pth'.format(i)))
+            )
+            self.agents[i].critic_optimizer.load_state_dict(
+                torch.load(os.path.join(self.model_dir, 'critic_optim_params_{}.pth'.format(i)))
+            )
+    
     def _get_agent_number(self, i):
+        """Helper to get an agent's number as a Torch tensor."""
         return torch.tensor([i]).to(device)

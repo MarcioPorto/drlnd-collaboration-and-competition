@@ -61,7 +61,6 @@ class Critic(nn.Module):
         self.fcs1 = nn.Linear((state_size + action_size) * NUM_AGENTS, fcs1_units)
         self.fc2 = nn.Linear(fcs1_units, fc2_units)
         self.fc3 = nn.Linear(fc2_units, 1)
-        
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -71,6 +70,8 @@ class Critic(nn.Module):
 
     def forward(self, state, action):
         """Build a critic (value) network that maps (state, action) pairs -> Q-values."""
+        # Concatenates states and actions as the input of the first layer
+        # DDPG does this before the second layer
         xs = torch.cat((state, action), dim=1)
         x = F.relu(self.fcs1(xs))
         x = F.relu(self.fc2(x))
