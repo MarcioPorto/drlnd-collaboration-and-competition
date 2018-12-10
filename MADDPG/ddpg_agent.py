@@ -82,8 +82,6 @@ class DDPGAgent():
         agent_id_tensor = torch.tensor([self.agent_id - 1]).to(device)
 
         ### Update critic
-        # with torch.no_grad():
-        #     Q_targets_next = self.critic_target(next_states, next_actions)        
         Q_targets_next = self.critic_target(next_states, next_actions)        
         Q_targets = rewards.index_select(1, agent_id_tensor) + (GAMMA * Q_targets_next * (1 - dones.index_select(1, agent_id_tensor)))
         Q_expected = self.critic_local(states, actions)
@@ -91,7 +89,6 @@ class DDPGAgent():
         critic_loss = F.mse_loss(Q_expected, Q_targets)
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
-        # torch.nn.utils.clip_grad_norm_(self.critic_local.parameters(), 1)
         self.critic_optimizer.step()
 
         ### Update actor
@@ -136,5 +133,3 @@ class DDPGAgent():
             
     def _decay_noise_amplification(self):
         self.noise_amplification *= self.noise_amplification_decay
-        #if self.noise_amplification < 1:
-        #    self.noise_amplification = 1 

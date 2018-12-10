@@ -27,7 +27,6 @@ class Actor(nn.Module):
         """
         super(Actor, self).__init__()
         self.seed = torch.manual_seed(RANDOM_SEED)
-        # self.batch_norm = nn.BatchNorm1d(state_size)
         self.fc1 = nn.Linear(state_size, fc1_units)
         self.fc2 = nn.Linear(fc1_units, fc2_units)
         self.fc3 = nn.Linear(fc2_units, action_size)
@@ -40,7 +39,6 @@ class Actor(nn.Module):
 
     def forward(self, state):
         """Build an actor (policy) network that maps states -> actions."""
-        # state = self.batch_norm(state)
         x = F.relu(self.fc1(state))
         x = F.relu(self.fc2(x))
         return F.tanh(self.fc3(x))
@@ -60,10 +58,6 @@ class Critic(nn.Module):
         """
         super(Critic, self).__init__()
         self.seed = torch.manual_seed(RANDOM_SEED)
-        # self.batch_norm = nn.BatchNorm1d(state_size * NUM_AGENTS)
-
-        # self.fcs1 = nn.Linear(state_size * NUM_AGENTS, fcs1_units)
-        # self.fc2 = nn.Linear(fcs1_units + (action_size * NUM_AGENTS), fc2_units)
         self.fcs1 = nn.Linear((state_size + action_size) * NUM_AGENTS, fcs1_units)
         self.fc2 = nn.Linear(fcs1_units, fc2_units)
         self.fc3 = nn.Linear(fc2_units, 1)
@@ -77,11 +71,6 @@ class Critic(nn.Module):
 
     def forward(self, state, action):
         """Build a critic (value) network that maps (state, action) pairs -> Q-values."""
-        # state = self.batch_norm(state)
-
-        # xs = F.relu(self.fcs1(state))
-        # x = torch.cat((xs, action), dim=1)
-        # x = F.relu(self.fc2(x))
         xs = torch.cat((state, action), dim=1)
         x = F.relu(self.fcs1(xs))
         x = F.relu(self.fc2(x))
