@@ -13,7 +13,7 @@ The files in this reporsitory implement a [MADDPG](https://papers.nips.cc/paper/
 The mechanics of this environment are as follows:
 
 - *Rewards*: An agent receives a reward of +0.1 if it hits the ball over the net. If the agent lets the ball hit the ground or hits the ball out of bounds, it receives a reward of -0.1.
-- *State space*: 24 variables describing position and velocity of the ball and racket. Importantly, each agent receives its own local observation.
+- *State space*: 24 variables describing position and velocity of the ball and racket. Importantly, each agent receives its own local observation. 16 out of the 24 variables correspond to the two previous observations for an agent. That way, you can think of the state space as a stack of 3 observations.
 - *Action space*: Vector of 2 numbers corresponding to movement along the x and y axis.
 
 The environment is considered solved, when the average (over 100 episodes) of the agents' scores is at least +0.5. The score for each episode is just the maximum score (without discounting) from either agent.
